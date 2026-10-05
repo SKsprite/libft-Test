@@ -67,6 +67,9 @@ $(BIN_DIR):
 $(UTILS_OBJ): test_utils.c test.h | $(BIN_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# ft_split's tests make chosen allocations fail (see tests/test_ft_split.c).
+$(BIN_DIR)/test_ft_split: LDLIBS += -Wl,--wrap=malloc,--wrap=calloc,--wrap=free
+
 $(BIN_DIR)/test_ft_%: tests/test_ft_%.c $(UTILS_OBJ) test.h $(LIBFT) | $(BIN_DIR)
 	$(CC) $(CFLAGS) $< $(UTILS_OBJ) -o $@ $(LDLIBS)
 

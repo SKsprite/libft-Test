@@ -1,6 +1,125 @@
 #include "test.h"
 
 /*
+** Allocation-failure injection. The Makefile links this test with
+** -Wl,--wrap=malloc,--wrap=calloc,--wrap=free, so every malloc/calloc/free
+** call made by libft (and this file) lands in the __wrap_ functions below,
+** which forward to the real allocator (valgrind still sees every block).
+** While `g_armed` is set, allocation number `g_fail_at` (0-based) returns
+** NULL and every successful block is recorded in `g_live` until freed.
+*/
+void	*__real_malloc(size_t size);
+void	*__real_calloc(size_t n, size_t size);
+void	__real_free(void *p);
+void	*__wrap_malloc(size_t size);
+void	*__wrap_calloc(size_t n, size_t size);
+void	__wrap_free(void *p);
+
+#define MAX_TRACKED 4096
+
+static int		g_armed = 0;
+static long		g_fail_at = -1;
+static long		g_nalloc = 0;
+static void		*g_live[MAX_TRACKED];
+static size_t	g_nlive = 0;
+
+static void	*track(void *p)
+{
+	if (p && g_nlive < MAX_TRACKED)
+		g_live[g_nlive++] = p;
+	return (p);
+}
+
+void	*__wrap_malloc(size_t size)
+{
+	if (!g_armed)
+		return (__real_malloc(size));
+	if (g_nalloc++ == g_fail_at)
+		return (NULL);
+	return (track(__real_malloc(size)));
+}
+
+void	*__wrap_calloc(size_t n, size_t size)
+{
+	if (!g_armed)
+		return (__real_calloc(n, size));
+	if (g_nalloc++ == g_fail_at)
+		return (NULL);
+	return (track(__real_calloc(n, size)));
+}
+
+void	__wrap_free(void *p)
+{
+	for (size_t i = 0; p && i < g_nlive; i++)
+	{
+		if (g_live[i] == p)
+		{
+			g_live[i] = g_live[--g_nlive];
+			break ;
+		}
+	}
+	__real_free(p);
+}
+
+/* Runs ft_split with allocation `fail_at` failing (-1 = none). */
+static char	**split_failing_at(const char *s, char c, long fail_at)
+{
+	char	**got;
+
+	g_nlive = 0;
+	g_nalloc = 0;
+	g_fail_at = fail_at;
+	g_armed = 1;
+	got = ft_split(s, c);
+	g_armed = 0;
+	return (got);
+}
+
+/* Frees everything ft_split allocated (and did not free) in the last call. */
+static void	release_live(void)
+{
+	while (g_nlive)
+		free(g_live[g_nlive - 1]);
+}
+
+/* How many allocations ft_split makes for (s, c) when nothing fails. */
+static long	count_allocs(const char *s, char c)
+{
+	char	**got = split_failing_at(s, c, -1);
+
+	CHECK(got != NULL, "s=\"%s\" c=%s: returned NULL with no failure",
+		s, show(&c, 1));
+	release_live();
+	return (g_nalloc);
+}
+
+/*
+** Makes allocation `idx` fail: ft_split must return NULL and must have
+** freed every block it allocated before the failure.
+*/
+static void	expect_clean_fail(const char *s, char c, long idx, long total)
+{
+	char	**got = split_failing_at(s, c, idx);
+
+	CHECK(got == NULL, "s=\"%s\" c=%s: allocation %ld/%ld failed but "
+		"ft_split did not return NULL", s, show(&c, 1), idx + 1, total);
+	CHECK(g_nlive == 0, "s=\"%s\" c=%s: allocation %ld/%ld failed -> "
+		"%zu block(s) leaked (earlier words not freed?)",
+		s, show(&c, 1), idx + 1, total, g_nlive);
+	release_live();
+}
+
+/* Fails each allocation of ft_split(s, c) in turn. */
+static void	expect_all_fail_clean(const char *s, char c)
+{
+	long	total = count_allocs(s, c);
+
+	CHECK(total > 0, "s=\"%s\": ft_split made no allocation", s);
+	for (long i = 0; i < total; i++)
+		expect_clean_fail(s, c, i, total);
+}
+
+/*
 ** `exp` is a NULL-terminated list of expected words. The result is freed
 ** the way the subject says (each string, then the array), so a bad
 ** allocation shows up as a crash/ABORT or under `make valgrind`.
@@ -148,6 +267,50 @@ static void	many_words(void)
 	free(got);
 }
 
+static void	alloc_fail_first(void)
+{
+	/* The very first allocation (normally the array) fails. */
+	expect_clean_fail("hello world foo", ' ', 0,
+		count_allocs("hello world foo", ' '));
+	expect_clean_fail("", ' ', 0, count_allocs("", ' '));
+}
+
+static void	alloc_fail_second(void)
+{
+	/* Nothing to free yet except the array itself. */
+	expect_clean_fail("hello world foo", ' ', 1,
+		count_allocs("hello world foo", ' '));
+}
+
+static void	alloc_fail_last(void)
+{
+	/* Every earlier word was allocated and must be freed. */
+	long	total = count_allocs("hello world foo", ' ');
+
+	expect_clean_fail("hello world foo", ' ', total - 1, total);
+}
+
+static void	alloc_fail_every_point(void)
+{
+	expect_all_fail_clean("hello world foo", ' ');
+	expect_all_fail_clean("x", ' ');
+	expect_all_fail_clean(",,a,,b,,c,,", ',');
+	expect_all_fail_clean("one,two,,three", ',');
+}
+
+static void	alloc_fail_many_words(void)
+{
+	char	s[101];
+
+	for (int i = 0; i < 50; i++)
+	{
+		s[2 * i] = (char)('a' + i % 26);
+		s[2 * i + 1] = ' ';
+	}
+	s[100] = '\0';
+	expect_all_fail_clean(s, ' ');
+}
+
 int	main(void)
 {
 	printf("ft_split\n");
@@ -164,5 +327,12 @@ int	main(void)
 	run_case("non-ASCII delimiter (0xff)", high_byte_delimiter);
 	run_case("each word is its own allocation", words_are_separate_allocations);
 	run_case("1000 words", many_words);
+	run_case("alloc fail: 1st allocation -> NULL", alloc_fail_first);
+	run_case("alloc fail: 2nd allocation -> NULL, no leak", alloc_fail_second);
+	run_case("alloc fail: last word -> NULL, earlier words freed",
+		alloc_fail_last);
+	run_case("alloc fail: every allocation point -> NULL, no leak",
+		alloc_fail_every_point);
+	run_case("alloc fail: every point over 50 words", alloc_fail_many_words);
 	return (finish("ft_split"));
 }
