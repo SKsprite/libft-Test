@@ -11,10 +11,14 @@ PART1		= isalpha isdigit isalnum isascii isprint \
 			  strnstr atoi calloc strdup
 PART2		= substr strjoin strtrim split itoa strmapi striteri \
 			  putchar_fd putstr_fd putendl_fd putnbr_fd
-FUNCS		= $(PART1) $(PART2)
+PART3		= lstnew lstadd_front lstsize lstlast lstadd_back \
+			  lstdelone lstclear lstiter lstmap
+FUNCS		= $(PART1) $(PART2) $(PART3)
 
 BIN_DIR		= bin
 UTILS_OBJ	= $(BIN_DIR)/test_utils.o
+LST_OBJ		= $(BIN_DIR)/lst_utils.o
+LST_BINS	= $(addprefix $(BIN_DIR)/test_ft_, $(PART3))
 BINS		= $(addprefix $(BIN_DIR)/test_ft_, $(FUNCS))
 
 export LIBFT_DIR
@@ -22,7 +26,8 @@ export LIBFT_DIR
 VALGRIND	= RUNNER="valgrind -q --leak-check=full --errors-for-leak-kinds=definite \
 			  --error-exitcode=42" TEST_TIMEOUT=30
 
-.PHONY: all test part1 part2 build libft valgrind valgrind_part1 valgrind_part2 \
+.PHONY: all test part1 part2 part3 build libft valgrind valgrind_part1 \
+		valgrind_part2 valgrind_part3 \
 		clean fclean re $(FUNCS) $(addprefix ft_, $(FUNCS))
 
 all: test
@@ -39,6 +44,10 @@ part1: libft
 part2: libft
 	@./run_tests.sh $(PART2)
 
+# Linked list functions (lstnew ... lstmap).
+part3: libft
+	@./run_tests.sh $(PART3)
+
 # Run the suite under valgrind (leaks, invalid reads/writes).
 valgrind: libft
 	@$(VALGRIND) ./run_tests.sh $(FUNCS)
@@ -48,6 +57,9 @@ valgrind_part1: libft
 
 valgrind_part2: libft
 	@$(VALGRIND) ./run_tests.sh $(PART2)
+
+valgrind_part3: libft
+	@$(VALGRIND) ./run_tests.sh $(PART3)
 
 # `make strlen` or `make ft_strlen` runs a single function's tests.
 $(FUNCS): libft
@@ -70,8 +82,16 @@ $(UTILS_OBJ): test_utils.c test.h | $(BIN_DIR)
 # ft_split's tests make chosen allocations fail (see tests/test_ft_split.c).
 $(BIN_DIR)/test_ft_split: LDLIBS += -Wl,--wrap=malloc,--wrap=calloc,--wrap=free
 
+$(LST_OBJ): lst_utils.c lst_utils.h test.h | $(BIN_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# The linked list tests track malloc/free and inject failures (lst_utils.c).
+$(LST_BINS): EXTRA_OBJ = $(LST_OBJ)
+$(LST_BINS): LDLIBS += -Wl,--wrap=malloc,--wrap=calloc,--wrap=free
+$(LST_BINS): $(LST_OBJ) lst_utils.h
+
 $(BIN_DIR)/test_ft_%: tests/test_ft_%.c $(UTILS_OBJ) test.h $(LIBFT) | $(BIN_DIR)
-	$(CC) $(CFLAGS) $< $(UTILS_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CFLAGS) $< $(UTILS_OBJ) $(EXTRA_OBJ) -o $@ $(LDLIBS)
 
 clean:
 	rm -rf $(BIN_DIR)
