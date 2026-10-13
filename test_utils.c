@@ -24,6 +24,29 @@ void	*opaque_ptr(void *p)
 	return (v);
 }
 
+int	crashes(void (*fn)(void))
+{
+	pid_t	pid;
+	int		status;
+
+	fflush(stdout);
+	pid = fork();
+	if (pid < 0)
+	{
+		perror("fork");
+		exit(2);
+	}
+	if (pid == 0)
+	{
+		signal(SIGSEGV, SIG_DFL);
+		signal(SIGBUS, SIG_DFL);
+		fn();
+		_exit(0);
+	}
+	waitpid(pid, &status, 0);
+	return (WIFSIGNALED(status));
+}
+
 const char	*show(const void *buf, size_t n)
 {
 	static char		out[8][1024];

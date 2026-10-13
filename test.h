@@ -38,6 +38,13 @@ char	*capture_read(int fd, size_t *len);
 /* Defeats compile-time folding / nonnull warnings when passing odd args. */
 void	*opaque_ptr(void *p);
 
+/*
+** Runs fn in a separate process and returns 1 if it was killed by a signal
+** (segfault, abort, ...), 0 if it returned normally. Used to check that an
+** ft_ function crashes exactly when the libc function does.
+*/
+int		crashes(void (*fn)(void));
+
 # define SIGN(x) (((x) > 0) - ((x) < 0))
 
 # define CHECK(cond, ...) do { \

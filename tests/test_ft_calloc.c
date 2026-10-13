@@ -51,6 +51,21 @@ static void	zero_sizes_are_freeable(void)
 	free(ft_calloc(10, 0));
 }
 
+static void	zero_sizes_like_glibc(void)
+{
+	/* glibc returns a unique non-NULL pointer here; Sfabi's tester requires it. */
+	size_t	args[][2] = {{0, 10}, {10, 0}, {1, 0}, {0, 0}};
+	void	*p;
+
+	for (size_t i = 0; i < 4; i++)
+	{
+		p = ft_calloc(args[i][0], args[i][1]);
+		CHECK(p != NULL, "ft_calloc(%zu, %zu) returned NULL (glibc returns a "
+			"free()-able non-NULL pointer)", args[i][0], args[i][1]);
+		free(p);
+	}
+}
+
 static void	overflow_returns_null(void)
 {
 	volatile size_t	big = SIZE_MAX;
@@ -62,6 +77,9 @@ static void	overflow_returns_null(void)
 	free(p);
 	p = ft_calloc(2, big);
 	CHECK(p == NULL, "ft_calloc(2, SIZE_MAX) should be NULL (overflow), got %p", p);
+	free(p);
+	p = ft_calloc(big, big);
+	CHECK(p == NULL, "ft_calloc(SIZE_MAX, SIZE_MAX) should be NULL (overflow), got %p", p);
 	free(p);
 	p = ft_calloc(half, 2);
 	CHECK(p == NULL, "ft_calloc(SIZE_MAX/2+2, 2) should be NULL (overflow), got %p", p);
@@ -99,6 +117,7 @@ int	main(void)
 	run_case("memory is zeroed (even if reused)", zeroed_memory);
 	run_case("int array is zeroed and writable", int_array);
 	run_case("nmemb or size = 0 -> free()-able result", zero_sizes_are_freeable);
+	run_case("(glibc) nmemb or size = 0 -> non-NULL", zero_sizes_like_glibc);
 	run_case("nmemb * size overflow -> NULL", overflow_returns_null);
 	run_case("large allocation (1 MiB) zeroed", large_allocation);
 	run_case("many small allocations, reuse, all zeroed", many_small);

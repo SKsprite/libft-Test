@@ -1,4 +1,6 @@
-LIBFT_DIR	?= ../libft
+# Default: the tester is cloned inside the libft repo, so libft is the parent
+# directory. Falls back to a sibling ../libft when the parent has no libft.h.
+LIBFT_DIR	?= $(if $(wildcard ../libft.h),..,../libft)
 LIBFT		= $(LIBFT_DIR)/libft.a
 
 CC			= cc
@@ -28,7 +30,7 @@ VALGRIND	= RUNNER="valgrind -q --leak-check=full --errors-for-leak-kinds=definit
 
 .PHONY: all test part1 part2 part3 build libft valgrind valgrind_part1 \
 		valgrind_part2 valgrind_part3 \
-		clean fclean re $(FUNCS) $(addprefix ft_, $(FUNCS))
+		clean fclean re remove $(FUNCS) $(addprefix ft_, $(FUNCS))
 
 all: test
 
@@ -99,3 +101,11 @@ clean:
 fclean: clean
 
 re: fclean all
+
+# Deletes this whole tester directory (e.g. before submitting libft). Refuses
+# unless the directory really is the tester, so it can't wipe anything else.
+remove:
+	@test -f "$(CURDIR)/run_tests.sh" && test -f "$(CURDIR)/test.h" \
+		|| { echo "refusing: $(CURDIR) does not look like the tester"; exit 1; }
+	@echo "Removing $(CURDIR)"
+	@rm -rf -- "$(CURDIR)"

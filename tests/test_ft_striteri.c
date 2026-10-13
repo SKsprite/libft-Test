@@ -75,6 +75,21 @@ static void	stops_at_terminator(void)
 	CHECK_MEM(s, "ABC\0xyz", 8);
 }
 
+static void	null_f(void)
+{
+	char	s[] = "abc";
+
+	ft_striteri(s, opaque_ptr(NULL));
+	CHECK_STR(s, "abc");
+}
+
+static void	null_s(void)
+{
+	g_calls = 0;
+	ft_striteri(opaque_ptr(NULL), record);
+	CHECK(g_calls == 0, "s == NULL: f called %zu times", g_calls);
+}
+
 int	main(void)
 {
 	printf("ft_striteri\n");
@@ -83,5 +98,7 @@ int	main(void)
 	run_case("f gets index i and &s[i], once per char", passes_address_inside_s);
 	run_case("empty string -> f never called", empty_string);
 	run_case("stops at '\\0' (bytes after are untouched)", stops_at_terminator);
+	run_case("(defensive) f == NULL -> no crash, s unchanged", null_f);
+	run_case("(defensive) s == NULL -> no crash, f not called", null_s);
 	return (finish("ft_striteri"));
 }

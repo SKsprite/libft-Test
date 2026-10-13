@@ -75,6 +75,42 @@ static void	null_content(void)
 	CHECK(hook_freed(node), "node with NULL content was not freed");
 }
 
+static void	null_del(void)
+{
+	/*
+	** Without del the content can't be released, so freeing the node would
+	** lose the only pointer to it (leak) and the caller's later free(node)
+	** becomes a double free. Expected: return without freeing anything.
+	*/
+	char	*s = strdup("heap content");
+	t_list	*node = mk_node(s);
+	int		node_freed;
+
+	hook_start(-1);
+	ft_lstdelone(node, NULL);
+	hook_stop();
+	node_freed = hook_freed(node);
+	CHECK(!node_freed, "del == NULL: the node was freed (must return "
+		"without freeing anything, the content would leak)");
+	CHECK(!hook_freed(s), "del == NULL: the content was freed");
+	CHECK(hook_nfree() == 0, "del == NULL: expected 0 frees, got %zu",
+		hook_nfree());
+	if (!node_freed)
+	{
+		CHECK_PTR(node->content, s);
+		raw_free(node);
+	}
+	free(s);
+}
+
+static void	null_lst_null_del(void)
+{
+	hook_start(-1);
+	ft_lstdelone(opaque_ptr(NULL), NULL);
+	hook_stop();
+	CHECK(hook_nfree() == 0, "free() called %zu times", hook_nfree());
+}
+
 static void	null_lst(void)
 {
 	g_ndel = 0;
@@ -94,5 +130,9 @@ int	main(void)
 	run_case("node with NULL content still freed", null_content);
 	run_case("(defensive) lst == NULL -> no crash, del not called",
 		null_lst);
+	run_case("(defensive) del == NULL -> node and content NOT freed",
+		null_del);
+	run_case("(defensive) lst == NULL, del == NULL -> no crash",
+		null_lst_null_del);
 	return (finish("ft_lstdelone"));
 }

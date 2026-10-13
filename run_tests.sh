@@ -6,6 +6,10 @@
 
 cd "$(dirname "$0")" || exit 1
 
+if [ -z "$LIBFT_DIR" ]; then
+	if [ -f ../libft.h ]; then LIBFT_DIR=..; else LIBFT_DIR=../libft; fi
+fi
+
 ALL="isalpha isdigit isalnum isascii isprint strlen memset bzero memcpy
 memmove strlcpy strlcat toupper tolower strchr strrchr strncmp memchr
 memcmp strnstr atoi calloc strdup
@@ -38,7 +42,7 @@ for f in "$@"; do
 	if ! make -s --no-print-directory "bin/test_ft_$f" >"$log" 2>&1; then
 		echo "${BOLD}ft_$f${RESET}"
 		echo "  ${RED}[BUILD FAIL]${RESET} could not compile/link the test against libft.a"
-		if ! nm "${LIBFT_DIR:-../libft}/libft.a" 2>/dev/null | grep -q " T ft_$f\$"; then
+		if ! nm "$LIBFT_DIR/libft.a" 2>/dev/null | grep -q " T ft_$f\$"; then
 			echo "      ${YELLOW}hint: libft.a does not define ft_$f (missing, misnamed, or not compiled from .c?)${RESET}"
 		fi
 		sed 's/^/      /' "$log" | head -n 15

@@ -28,43 +28,61 @@ files themselves (see [How the tests link to libft.a](#how-the-tests-link-to-lib
 
 ## Layout
 
+Clone the tester **inside** your libft repo:
+
+```sh
+cd libft
+git clone https://github.com/SKsprite/libft-Test.git libft-tester
+cd libft-tester && make
 ```
-Milestone0/
-├── libft/              <- your library (must build libft.a with `make`)
-└── libft Test/
+
+```
+libft/                  <- your library (must build libft.a with `make`)
+├── libft.h
+├── ft_*.c
+├── Makefile
+└── libft-tester/
     ├── Makefile
     ├── run_tests.sh    <- builds and runs tests one function at a time
     ├── test.h          <- assertion macros (CHECK, CHECK_INT, CHECK_PTR, ...)
-    ├── test_utils.c    <- runner: fork per case, timeout, crash detection
+    ├── test_utils.c    <- runner: fork per case, timeout, crash detection,
+    │                      crashes() to compare a crash with libc's
     ├── lst_utils.c/.h  <- Part 3 helpers: malloc/free tracking, failing
     │                      malloc, list builders, a recording `del`
     └── tests/
         ├── test_ft_atoi.c
-        ├── test_ft_bzero.c
         ├── ...
-        ├── test_ft_lstnew.c
         └── ... one file per libft function (43 files)
 ```
 
-The tests expect the library in `../libft`. If yours is somewhere else,
-pass `LIBFT_DIR`:
+The tests use the parent directory (`..`) as the library. If `../libft.h`
+does not exist, they fall back to a sibling `../libft` directory, so a
+tester cloned next to libft also works. If yours is somewhere else, pass
+`LIBFT_DIR`:
 
 ```sh
 make LIBFT_DIR=/path/to/libft
 ```
 
+**Before you submit**, run `make remove` to delete the tester folder (or
+don't commit it). The evaluation runs norminette on everything in the repo,
+and the test files are not written to the Norm. If your libft `Makefile`
+picks up sources with a wildcard (e.g. `$(wildcard *.c)`), it won't see the
+tester's files: they are in a subfolder.
+
 ## How the tests link to libft.a
 
-`make` first runs `make` inside `../libft`. Your own Makefile compiles each
-`ft_*.c` into a `.o` and archives them into `libft.a`. Each test is then
+`make` first runs `make` inside the libft directory (`..`). Your own
+Makefile compiles each `ft_*.c` into a `.o` and archives them into
+`libft.a`. Each test is then
 linked against that archive only:
 
 ```sh
-cc -Wall -Wextra -Werror -I. -I../libft tests/test_ft_strlen.c test_utils.c \
-   -o bin/test_ft_strlen -L../libft -lft -lbsd
+cc -Wall -Wextra -Werror -I. -I.. tests/test_ft_strlen.c test_utils.c \
+   -o bin/test_ft_strlen -L.. -lft -lbsd
 ```
 
-`-L../libft` says where `libft.a` is, and `-lft` links it. The Part 3 tests
+`-L..` says where `libft.a` is, and `-lft` links it. The Part 3 tests
 also add `lst_utils.c`. They and the `split` test are linked with
 `-Wl,--wrap=malloc,--wrap=calloc,--wrap=free`, so the test sees every
 `malloc`/`free` made by your library.
@@ -72,32 +90,42 @@ also add `lst_utils.c`. They and the `split` test are linked with
 To check what is inside your archive:
 
 ```sh
-ar t ../libft/libft.a               # lists the .o files in the archive
-nm ../libft/libft.a | grep " T ft_" # lists the functions it defines
+ar t ../libft.a               # lists the .o files in the archive
+nm ../libft.a | grep " T ft_" # lists the functions it defines
 ```
 
 If a function is missing from that list, its test shows **[BUILD FAIL]**.
 This usually means the `.c` file does not compile or is not listed in `SRC`
-in your Makefile. In that case, fix it and run `make re` in `../libft`.
+in your Makefile. In that case, fix it and run `make re` in your libft
+directory.
 
 ## Usage
 
-Run these from inside `libft Test/`:
+Run these from inside the tester folder:
 
 | Command | What it does |
 |---|---|
-| `make` / `make test` | Builds `libft.a` (runs `make` in `../libft`), then builds and runs every test |
+| `make` / `make test` | Builds `libft.a` (runs `make` in `..`), then builds and runs every test |
 | `make part1` | Tests only Part 1, the libc functions (`isalpha` … `strdup`) |
 | `make part2` | Tests only Part 2, the additional functions (`substr` … `putnbr_fd`) |
 | `make part3` | Tests only Part 3, the linked list functions (`lstnew` … `lstmap`) |
 | `make strlen` or `make ft_strlen` | Tests one function only |
-| `./run_tests.sh atoi memmove` | Tests several functions you pick |
+| `./run_tests.sh atoi memmove` | Tests several functions you pick (does **not** rebuild `libft.a`, see below) |
 | `make valgrind` | Runs everything under valgrind to find invalid reads/writes and leaks |
 | `make valgrind_part1` / `_part2` / `_part3` | The same valgrind run, for one part only |
 | `make build` | Only compiles the test binaries (into `bin/`) |
 | `make clean` | Deletes `bin/` |
+| `make remove` | Deletes the whole tester folder (do this before you submit libft). Afterwards, `cd ..` |
 
 You can run any binary on its own after it is built, e.g. `./bin/test_ft_strlcat`.
+
+`./run_tests.sh` and the binaries in `bin/` do not build your library. If
+`libft.a` is missing, the old binaries are run again without any error, so
+you test old code. After you change libft, use a `make` target, or run
+`make` in your libft folder first.
+
+`make remove` only deletes the folder if it contains `run_tests.sh` and
+`test.h`, so it cannot delete the wrong directory.
 
 ## Reading the output
 
@@ -146,7 +174,10 @@ end lists which functions passed, which failed and which did not build.
   content. For example, `ft_lstlast` must return the real last node, and
   `ft_lstmap` must not reuse nodes from the original list. Frees are checked
   pointer by pointer. `ft_lstdelone` must free the node and must not free
-  the next node.
+  the next node. With `del == NULL` it must free nothing.
+- **Crashes that libc has too** (strict `memcpy` cases): the call is run in
+  a separate process, once with `ft_memcpy` and once with libc's `memcpy`.
+  The case passes only if both crash or neither does.
 - **Allocation failure** (`split`, `lstnew`, `lstmap`): each `malloc` is made
   to fail in turn. The function must return `NULL` and every block it had
   already allocated must be freed.
@@ -163,7 +194,7 @@ end lists which functions passed, which failed and which did not build.
 | `strlen` | `""`, single char, embedded `'\0'`, high bytes, 100 000 chars |
 | `memset` | `n = 0`, destination full of `'\0'` (must not stop at NUL), `c` converted to unsigned char (`'A'+256`, `-1`), 1 MiB |
 | `bzero` | `n = 0`, embedded `'\0'`, first byte already `'\0'`, 1 MiB |
-| `memcpy` | `n = 0`, copies past `'\0'`, high bytes, return value, `NULL, NULL, 0`, struct, 1 MiB |
+| `memcpy` | `n = 0`, copies past `'\0'`, high bytes, return value, `NULL, NULL, 0`, `buf, NULL, 0` returns `buf`, `NULL, NULL, 3` returns `NULL` without crashing, (strict) `NULL` dst or src with `n > 0` must crash like libc (catches a `!dst \|\| !src` guard), struct, 1 MiB |
 | `memmove` | overlap both ways (dst > src must copy backwards), `dst == src`, `n = 0`, `NULL, NULL, 0`, 1 MiB overlapping |
 | `strlcpy` | `size = 0` (writes nothing), `size = 1`, `size == len`, `size == len+1`, truncation, empty src, return value is always `strlen(src)` |
 | `strlcat` | `size = 0`, `size < strlen(dst)`, `size == strlen(dst)` and `+1`, exact fit, empty dst/src, dst with no `'\0'` within `size` |
@@ -173,7 +204,7 @@ end lists which functions passed, which failed and which did not build.
 | `memcmp` | `n = 0`, does not stop at `'\0'`, unsigned compare, difference only in the last byte, int arrays |
 | `strnstr` | empty `little` returns `big`, empty `big`, `len = 0`, `len` cuts the match short, `len` larger than `big` (incl. `SIZE_MAX`), partial match before the real one (`"aaab"`/`"aab"`) |
 | `atoi` | all 6 whitespace chars, `+`/`-`, double signs (`--42`, `+-42`), sign separated by a space, junk after the number, no digits, leading zeros, `INT_MAX`, `INT_MIN` |
-| `calloc` | memory really zeroed (even when malloc reuses a dirty chunk), `0` arguments can be passed to `free()`, `nmemb * size` overflow returns `NULL`, 1 MiB, many small blocks |
+| `calloc` | memory really zeroed (even when malloc reuses a dirty chunk), `0` arguments can be passed to `free()`, (glibc) `0` arguments return non-`NULL`, `nmemb * size` overflow returns `NULL` (incl. `SIZE_MAX * SIZE_MAX`), 1 MiB, many small blocks |
 | `strdup` | `""`, new pointer (not the original), independent copy, embedded `'\0'`, high bytes, 100 000 chars, lengths 0..63 |
 
 ### Part 2
@@ -186,7 +217,7 @@ end lists which functions passed, which failed and which did not build.
 | `split` | repeated delimiters (no empty words), leading/trailing delimiters, no delimiter, empty string returns `{NULL}` (not NULL), only delimiters, `c = '\0'`, other/non-ASCII delimiters, words are separate allocations, 1000 words, **every malloc failing in turn** returns `NULL` with no leak. Every result is freed the way the subject describes |
 | `itoa` | `0`, -9..9, powers of ten ±1, `INT_MAX`, `INT_MIN`, a sweep of -10000..10000 and near the limits, new string on every call |
 | `strmapi` | `f` gets index 0, 1, 2… once per char in order, uses the index, empty string (f never called, returns `""`), original not modified, 100 000 chars |
-| `striteri` | modifies in place, `f` gets `&s[i]` (not a copy) and the right index, empty string, stops at `'\0'` |
+| `striteri` | modifies in place, `f` gets `&s[i]` (not a copy) and the right index, empty string, stops at `'\0'`, (defensive) `f == NULL`, `s == NULL` |
 | `putchar_fd` | every byte 0..255 (incl. `'\0'`) is exactly 1 byte, calls append, `fd = -1` doesn't crash |
 | `putstr_fd` | `""` writes nothing, no newline added, stops at `'\0'`, high bytes, 100 000 chars, `fd = -1` |
 | `putendl_fd` | `""` still writes `"\n"`, a string already ending in `'\n'` gets another, several lines, `fd = -1` |
@@ -206,17 +237,32 @@ make a chosen `malloc` fail.
 | `lstsize` | `NULL` list returns 0, sizes 0..50, 100 000 nodes, `NULL` contents counted, start mid-list |
 | `lstlast` | `NULL` list returns `NULL`, 1 node, last content `NULL`, returns the node (not the content), 100 001 nodes |
 | `lstadd_back` | empty list sets `*lst = new`, head unchanged, repeated adds keep order, appending a chain, `new == NULL` |
-| `lstdelone` | `del` gets `lst->content` (not the node), node freed, `next` node **not** freed or del'd, `del = free` |
+| `lstdelone` | `del` gets `lst->content` (not the node), node freed, `next` node **not** freed or del'd, `del = free`, (defensive) `del == NULL` frees **nothing** (freeing the node would leak the content and make the caller's own `free` a double free) |
 | `lstclear` | every content del'd in order, every node freed, `*lst = NULL`, empty list, clearing from the middle of a list, 100 000 nodes |
 | `lstiter` | `f` once per node in order, gets content (not node), in-place changes, links untouched, `NULL` list, no malloc/free |
 | `lstmap` | values mapped in order, new nodes (original untouched), last `next` is `NULL`, `f` returning `NULL`, `del = NULL`, empty list returns `NULL`, **every malloc failing in turn** returns `NULL` with all new nodes freed and every content made by `f` passed to `del` |
 
-Cases named **(defensive)** (`lst == NULL`, `new == NULL`, `f == NULL`) are
-not required by the subject. Many evaluators try them, but your libft is
-still correct if it crashes on them.
+## What the labels mean
 
-Behaviour the subject or the C standard leaves undefined is **not** tested:
-`NULL` passed to string functions, and `atoi` overflow beyond `int`.
+Some case names start with a label. These cases go beyond the subject, but
+online testers and evaluators check them:
+
+- **(defensive)**: a `NULL` argument (`lst`, `new`, `f`, `del`, `s`). The
+  subject doesn't require these, but many evaluators try them, and the
+  expected result is "no crash". For `ft_lstdelone(node, NULL)` it is
+  "free nothing".
+- **(strict)**: `memcpy` with a `NULL` pointer and `n > 0` must crash the
+  same way libc does. A guard like `if (!dst || !src) return (NULL);` hides
+  the crash, and it also makes `ft_memcpy(buf, NULL, 0)` return `NULL`
+  instead of `buf`. Some testers (alelievr, francinette) mark that as
+  wrong. `if (!dst && !src)` passes every case.
+- **(glibc)**: matches what glibc does where the standard allows more than
+  one answer, e.g. `calloc(0, 10)` returns a non-`NULL` pointer. Sfabi's
+  tester requires this.
+
+Other behaviour the subject or the C standard leaves undefined is **not**
+tested: `NULL` passed to string functions, and `atoi` overflow beyond
+`int`.
 
 ## Tips
 
@@ -224,6 +270,9 @@ Behaviour the subject or the C standard leaves undefined is **not** tested:
   allocating one byte too few. `make valgrind` catches those: any valgrind
   error turns that case into a KO, and the `Invalid write` / `Invalid read`
   report is printed above it.
+- Under `make valgrind`, the (strict) `memcpy` cases print valgrind
+  `Invalid write` / `Invalid read` lines. This is expected: those cases
+  crash on purpose, in a separate process. Only the KO lines count.
 - `make valgrind_part3` is worth running even when `make part3` passes.
   It catches nodes you forgot to free, for example in `ft_lstclear` or in
   the failure path of `ft_lstmap`.
@@ -236,10 +285,17 @@ Behaviour the subject or the C standard leaves undefined is **not** tested:
   write another `static void` function in `tests/test_ft_<name>.c` and
   register it in `main()` with `run_case("description", fn)`.
   List tests can use the helpers in `lst_utils.h`: `mk_list`,
-  `free_nodes`, `rec_del` and `hook_start`/`hook_freed`.
+  `free_nodes`, `rec_del` and `hook_start`/`hook_freed`. To check that a
+  call crashes, use `crashes(fn)` from `test.h`. It returns 1 if `fn` was
+  killed by a signal.
 
 ## Credits
 
 The test suite was generated with AI (Claude, through Claude Code). It is
 used to check the libft library, and it is not part of the submitted
 library.
+
+Some cases were added after comparing with
+[Sfabi28/libft_tester](https://github.com/Sfabi28/libft_tester): the
+`lstdelone` `del == NULL` case, the `striteri` `NULL` cases and the `calloc`
+zero-size cases.
