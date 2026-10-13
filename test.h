@@ -45,6 +45,15 @@ void	*opaque_ptr(void *p);
 */
 int		crashes(void (*fn)(void));
 
+/* 1 when the test runs under valgrind (it preloads its vgpreload_*.so). */
+int		under_valgrind(void);
+
+/*
+** Ends the current case as [SKIP] (not counted as passed or failed) and
+** prints why. Only call it from inside a case run by run_case().
+*/
+void	skip_case(const char *why) __attribute__((noreturn));
+
 # define SIGN(x) (((x) > 0) - ((x) < 0))
 
 # define CHECK(cond, ...) do { \

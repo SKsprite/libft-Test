@@ -85,6 +85,9 @@ static void	same_crash_as_libc(void *dst, const void *src, size_t n,
 	int	ft;
 	int	lc;
 
+	if (under_valgrind())
+		skip_case("crash test: skipped under valgrind (it reports the "
+			"intended segfault as an error). Run `make memcpy` instead.");
 	g_dst = dst;
 	g_src = src;
 	g_n = n;

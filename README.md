@@ -147,6 +147,10 @@ ft_strchr: 5/7 passed
   ABORT usually means a bad `free` or heap corruption.
 - **[KO] ... -> TIMEOUT**: the case ran for more than 2 seconds, which usually
   means an infinite loop. Change the limit with `TEST_TIMEOUT=5 make`.
+- **[SKIP]**: the case was not run. The line underneath says why. It
+  counts as neither passed nor failed. The (strict) `memcpy` crash cases
+  are skipped under `make valgrind`, because valgrind reports the intended
+  segfault as an error. They run normally with `make memcpy`.
 - **[BUILD FAIL]**: the test could not be compiled or linked against your
   `libft.a`. The compiler/linker errors are shown underneath. A common
   cause is a function that is missing from `libft.a` or has the wrong
@@ -270,9 +274,6 @@ tested: `NULL` passed to string functions, and `atoi` overflow beyond
   allocating one byte too few. `make valgrind` catches those: any valgrind
   error turns that case into a KO, and the `Invalid write` / `Invalid read`
   report is printed above it.
-- Under `make valgrind`, the (strict) `memcpy` cases print valgrind
-  `Invalid write` / `Invalid read` lines. This is expected: those cases
-  crash on purpose, in a separate process. Only the KO lines count.
 - `make valgrind_part3` is worth running even when `make part3` passes.
   It catches nodes you forgot to free, for example in `ft_lstclear` or in
   the failure path of `ft_lstmap`.
